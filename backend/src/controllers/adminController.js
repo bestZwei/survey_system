@@ -16,13 +16,16 @@ const getAllUsers = async (req, res) => {
 // 修改用户角色
 const updateUserRole = async (req, res) => {
   try {
-    const { userId, role } = req.body;
+    const { userId } = req.params;  // 从URL参数获取userId
+    const { role } = req.body;      // 从请求体获取role
+    
     await pool.query(
       'UPDATE users SET role = ? WHERE user_id = ?',
       [role, userId]
     );
     res.json({ message: '用户角色更新成功' });
   } catch (error) {
+    console.error('更新角色失败:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 };
