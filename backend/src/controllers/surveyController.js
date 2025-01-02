@@ -58,13 +58,13 @@ const createSurvey = async (req, res) => {
 const getSurveys = async (req, res) => {
   try {
     if (!req.user) {
+      console.log('未授权访问，返回空列表');
       return res.json([]);
     }
 
     const userId = req.user.userId;
     console.log('当前用户ID:', userId);
 
-    // 修改查询语句，简化条件
     const [surveys] = await pool.query(`
       SELECT 
         s.*,

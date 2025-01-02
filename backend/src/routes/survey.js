@@ -16,7 +16,7 @@ const {
 } = require('../controllers/surveyController');
 
 router.post('/', auth, createSurvey);
-router.get('/', getSurveys);
+router.get('/', auth, getSurveys);
 router.get('/my-surveys', auth, getMySurveys);
 router.get('/my-responses', auth, getMyResponses);
 router.get('/:surveyId', getSurveyById);
