@@ -174,7 +174,7 @@ const SurveyDetail = ({ edit }) => {
                     value={answers[question.question_id] || ''}
                     onChange={(e) => handleAnswerChange(question.question_id, e.target.value, 'SINGLE_CHOICE')}
                   >
-                    {question.options.map((option) => (
+                    {question.options && question.options.map((option) => (
                       <FormControlLabel
                         key={option.option_id}
                         value={option.option_id}
@@ -189,14 +189,14 @@ const SurveyDetail = ({ edit }) => {
               {question.type === 'MULTIPLE_CHOICE' && (
                 <FormControl component="fieldset" required={question.required}>
                   <FormGroup>
-                    {question.options.map((option) => (
+                    {question.options && question.options.map((option) => (
                       <FormControlLabel
                         key={option.option_id}
                         control={
                           <Checkbox
                             checked={Array.isArray(answers[question.question_id]) && 
                                     answers[question.question_id].includes(option.option_id)}
-                            onChange={(e) => handleAnswerChange(question.question_id, option.option_id, 'MULTIPLE_CHOICE')}
+                            onChange={() => handleAnswerChange(question.question_id, option.option_id, 'MULTIPLE_CHOICE')}
                           />
                         }
                         label={option.option_text}

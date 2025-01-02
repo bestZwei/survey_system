@@ -23,11 +23,12 @@ const MyResponses = () => {
   const loadMyResponses = async () => {
     try {
       setLoading(true);
+      setError('');
       const { data } = await surveys.getMyResponses();
-      setResponses(data);
+      setResponses(Array.isArray(data) ? data : []);
     } catch (error) {
-      setError('加载回答失败');
       console.error('加载回答失败:', error);
+      setError(error.response?.data?.error || '加载回答失败');
     } finally {
       setLoading(false);
     }
@@ -66,7 +67,7 @@ const MyResponses = () => {
                     {response.title}
                   </Typography>
                   <Typography variant="body2" color="textSecondary" gutterBottom>
-                    回答时间: {new Date(response.response_date).toLocaleDateString()}
+                    回答ID: {response.response_id}
                   </Typography>
                   <Button
                     component={Link}

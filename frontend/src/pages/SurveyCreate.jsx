@@ -46,6 +46,18 @@ const SurveyCreate = () => {
       ...newQuestions[index],
       [field]: value,
     };
+    
+    // 当问题类型改变时，初始化选项
+    if (field === 'type') {
+      if (value === 'SINGLE_CHOICE' || value === 'MULTIPLE_CHOICE') {
+        if (!newQuestions[index].options || newQuestions[index].options.length === 0) {
+          newQuestions[index].options = ['选项1'];
+        }
+      } else {
+        newQuestions[index].options = [];
+      }
+    }
+    
     setQuestions(newQuestions);
   };
 

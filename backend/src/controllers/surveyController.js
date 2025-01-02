@@ -26,7 +26,7 @@ const createSurvey = async (req, res) => {
 
         await connection.query(
           'INSERT INTO questions (question_id, survey_id, question_text, question_type, question_order, required) VALUES (?, ?, ?, ?, ?, ?)',
-          [questionId, surveyId, question.text, question.type, i + 1, question.required]
+          [questionId, surveyId, question.text, question.type, i + 1, question.required || false]
         );
 
         // 如果是选择题，创建选项
@@ -70,10 +70,13 @@ const getSurveys = async (req, res) => {
 const getSurveyById = async (req, res) => {
   try {
     const { surveyId } = req.params;
-
+    
     // 获取问卷基本信息
     const [surveys] = await pool.query(
-      'SELECT s.*, u.username as creator_name FROM surveys s JOIN users u ON s.creator_id = u.user_id WHERE s.survey_id = ?',
+      `SELECT s.*, u.username as creator_name 
+       FROM surveys s 
+       JOIN users u ON s.creator_id = u.user_id 
+       WHERE s.survey_id = ?`,
       [surveyId]
     );
 
@@ -85,57 +88,92 @@ const getSurveyById = async (req, res) => {
 
     // 获取问题
     const [questions] = await pool.query(
-      'SELECT * FROM questions WHERE survey_id = ? ORDER BY question_order',
+      `SELECT 
+        q.question_id,
+        q.question_text,
+        q.question_type as type,
+        q.required,
+        q.question_order
+       FROM questions q 
+       WHERE q.survey_id = ?
+       ORDER BY q.question_order`,
       [surveyId]
     );
 
     // 获取选项
-    for (const question of questions) {
-      if (question.question_type !== 'TEXT') {
-        const [options] = await pool.query(
-          'SELECT * FROM options WHERE question_id = ? ORDER BY option_order',
-          [question.question_id]
-        );
-        question.options = options;
-      }
-    }
+    const [options] = await pool.query(
+      `SELECT 
+        o.option_id,
+        o.question_id,
+        o.option_text,
+        o.option_order
+       FROM options o
+       JOIN questions q ON o.question_id = q.question_id
+       WHERE q.survey_id = ?
+       ORDER BY o.option_order`,
+      [surveyId]
+    );
 
-    survey.questions = questions;
+    // 将选项关联到对应的问题
+    const questionsWithOptions = questions.map(question => ({
+      question_id: question.question_id,
+      question_text: question.question_text,
+      type: question.type,
+      required: question.required,
+      options: options.filter(option => option.question_id === question.question_id)
+    }));
+
+    survey.questions = questionsWithOptions;
+
     res.json(survey);
   } catch (error) {
+    console.error('获取问卷详情失败:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 };
 
 // 提交问卷回答
 const submitResponse = async (req, res) => {
+  let connection;
   try {
     const { surveyId } = req.params;
     const { answers } = req.body;
     const userId = req.user.userId;
 
-    const connection = await pool.getConnection();
+    connection = await pool.getConnection();
     await connection.beginTransaction();
 
-    try {
-      for (const answer of answers) {
-        const responseId = uuidv4();
-        await connection.query(
-          'INSERT INTO responses (response_id, survey_id, question_id, user_id, answer_text, option_id) VALUES (?, ?, ?, ?, ?, ?)',
-          [responseId, surveyId, answer.questionId, userId, answer.text, answer.optionId]
-        );
-      }
+    // 验证问卷是否存在
+    const [survey] = await connection.query(
+      'SELECT survey_id FROM surveys WHERE survey_id = ?',
+      [surveyId]
+    );
 
-      await connection.commit();
-      res.json({ message: '问卷提交成功' });
-    } catch (error) {
+    if (survey.length === 0) {
+      return res.status(404).json({ error: '问卷不存在' });
+    }
+
+    // 插入回答
+    for (const answer of answers) {
+      const responseId = uuidv4();
+      await connection.query(
+        'INSERT INTO responses (response_id, survey_id, question_id, user_id, answer_text, option_id) VALUES (?, ?, ?, ?, ?, ?)',
+        [responseId, surveyId, answer.questionId, userId, answer.text, answer.optionId]
+      );
+    }
+
+    await connection.commit();
+    res.json({ message: '问卷提交成功' });
+  } catch (error) {
+    if (connection) {
       await connection.rollback();
-      throw error;
-    } finally {
+    }
+    console.error('提交问卷回答失败:', error);
+    res.status(500).json({ error: '服务器错误' });
+  } finally {
+    if (connection) {
       connection.release();
     }
-  } catch (error) {
-    res.status(500).json({ error: '服务器错误' });
   }
 };
 
@@ -155,22 +193,45 @@ const getMySurveys = async (req, res) => {
 
 // 获取用户的问卷回答
 const getMyResponses = async (req, res) => {
+  let connection;
   try {
     const userId = req.user.userId;
-    const [responses] = await pool.query(`
+    if (!userId) {
+      return res.status(401).json({ error: '未授权访问' });
+    }
+
+    connection = await pool.getConnection();
+
+    // 修改查询语句，使用 response_id 作为唯一标识
+    const [responses] = await connection.query(`
       SELECT DISTINCT 
         s.survey_id, 
         s.title,
         s.description,
-        r.created_at as response_date
-      FROM surveys s
-      JOIN responses r ON s.survey_id = r.survey_id
+        MAX(r.response_id) as response_id
+      FROM responses r
+      INNER JOIN surveys s ON r.survey_id = s.survey_id
       WHERE r.user_id = ?
-      ORDER BY r.created_at DESC
+      GROUP BY s.survey_id, s.title, s.description
+      ORDER BY MAX(r.response_id) DESC
     `, [userId]);
-    res.json(responses);
+
+    return res.json(responses || []);
+
   } catch (error) {
-    res.status(500).json({ error: '服务器错误' });
+    console.error('获取用户回答失败:', error);
+    return res.status(500).json({ 
+      error: '服务器错误',
+      message: error.message
+    });
+  } finally {
+    if (connection) {
+      try {
+        connection.release();
+      } catch (releaseError) {
+        console.error('释放数据库连接失败:', releaseError);
+      }
+    }
   }
 };
 
