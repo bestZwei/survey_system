@@ -15,9 +15,10 @@ import {
   FormGroup,
   Button,
   CircularProgress,
+  FormControl
 } from '@mui/material';
 
-const SurveyDetail = () => {
+const SurveyDetail = ({ edit }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -28,7 +29,10 @@ const SurveyDetail = () => {
 
   useEffect(() => {
     loadSurvey();
-  }, [id]);
+    if (edit) {
+      loadExistingResponse();
+    }
+  }, [id, edit]);
 
   const loadSurvey = async () => {
     try {
@@ -44,6 +48,24 @@ const SurveyDetail = () => {
       setError('加载问卷失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadExistingResponse = async () => {
+    try {
+      const { data } = await surveys.getSurveyResponse(id);
+      const initialAnswers = {};
+      data.forEach((response) => {
+        if (response.answer_text && response.answer_text.includes(',')) {
+          // 处理多选题答案
+          initialAnswers[response.question_id] = response.answer_text.split(',');
+        } else {
+          initialAnswers[response.question_id] = response.answer_text || response.option_id;
+        }
+      });
+      setAnswers(initialAnswers);
+    } catch (error) {
+      setError('加载已有回答失败');
     }
   };
 
@@ -71,15 +93,23 @@ const SurveyDetail = () => {
     }
 
     try {
-      const formattedAnswers = Object.entries(answers).map(([questionId, value]) => ({
-        questionId,
-        text: Array.isArray(value) ? value.join(',') : value,
-      }));
+      const formattedAnswers = Object.entries(answers).map(([questionId, value]) => {
+        const question = survey.questions.find(q => q.question_id === questionId);
+        return {
+          questionId,
+          text: question.type === 'MULTIPLE_CHOICE' ? value.join(',') : value,
+          optionId: question.type === 'SINGLE_CHOICE' ? value : null
+        };
+      });
 
-      await surveys.submit(id, { answers: formattedAnswers });
-      navigate('/surveys');
+      if (edit) {
+        await surveys.updateResponse(id, { answers: formattedAnswers });
+      } else {
+        await surveys.submit(id, { answers: formattedAnswers });
+      }
+      navigate('/my-responses');
     } catch (error) {
-      setError('提交答案失败');
+      setError(edit ? '更新答案失败' : '提交答案失败');
     }
   };
 
@@ -109,6 +139,16 @@ const SurveyDetail = () => {
           {survey.description}
         </Typography>
 
+        <TextField
+          fullWidth
+          label="问卷链接"
+          value={`${window.location.origin}/surveys/${survey.survey_id}`}
+          InputProps={{
+            readOnly: true,
+          }}
+          sx={{ mb: 3 }}
+        />
+
         <form onSubmit={handleSubmit}>
           {survey.questions.map((question, index) => (
             <Box key={question.question_id} sx={{ mb: 4 }}>
@@ -122,43 +162,48 @@ const SurveyDetail = () => {
                   fullWidth
                   multiline
                   rows={3}
-                  value={answers[question.question_id]}
-                  onChange={(e) => handleAnswerChange(question.question_id, e.target.value)}
+                  value={answers[question.question_id] || ''}
+                  onChange={(e) => handleAnswerChange(question.question_id, e.target.value, 'TEXT')}
                   required={question.required}
                 />
               )}
 
               {question.type === 'SINGLE_CHOICE' && (
-                <RadioGroup
-                  value={answers[question.question_id]}
-                  onChange={(e) => handleAnswerChange(question.question_id, e.target.value)}
-                >
-                  {question.options.map((option) => (
-                    <FormControlLabel
-                      key={option.option_id}
-                      value={option.option_id}
-                      control={<Radio />}
-                      label={option.option_text}
-                    />
-                  ))}
-                </RadioGroup>
+                <FormControl component="fieldset" required={question.required}>
+                  <RadioGroup
+                    value={answers[question.question_id] || ''}
+                    onChange={(e) => handleAnswerChange(question.question_id, e.target.value, 'SINGLE_CHOICE')}
+                  >
+                    {question.options.map((option) => (
+                      <FormControlLabel
+                        key={option.option_id}
+                        value={option.option_id}
+                        control={<Radio />}
+                        label={option.option_text}
+                      />
+                    ))}
+                  </RadioGroup>
+                </FormControl>
               )}
 
               {question.type === 'MULTIPLE_CHOICE' && (
-                <FormGroup>
-                  {question.options.map((option) => (
-                    <FormControlLabel
-                      key={option.option_id}
-                      control={
-                        <Checkbox
-                          checked={answers[question.question_id].includes(option.option_id)}
-                          onChange={(e) => handleAnswerChange(question.question_id, option.option_id, 'MULTIPLE_CHOICE')}
-                        />
-                      }
-                      label={option.option_text}
-                    />
-                  ))}
-                </FormGroup>
+                <FormControl component="fieldset" required={question.required}>
+                  <FormGroup>
+                    {question.options.map((option) => (
+                      <FormControlLabel
+                        key={option.option_id}
+                        control={
+                          <Checkbox
+                            checked={Array.isArray(answers[question.question_id]) && 
+                                    answers[question.question_id].includes(option.option_id)}
+                            onChange={(e) => handleAnswerChange(question.question_id, option.option_id, 'MULTIPLE_CHOICE')}
+                          />
+                        }
+                        label={option.option_text}
+                      />
+                    ))}
+                  </FormGroup>
+                </FormControl>
               )}
             </Box>
           ))}
@@ -175,7 +220,7 @@ const SurveyDetail = () => {
             type="submit"
             disabled={!user}
           >
-            {user ? '提交问卷' : '请先登录'}
+            {edit ? '更新答案' : (user ? '提交问卷' : '请先登录')}
           </Button>
         </form>
       </Paper>

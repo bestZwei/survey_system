@@ -32,7 +32,11 @@ export const surveys = {
   create: (data) => api.post('/surveys', data),
   getAll: () => api.get('/surveys'),
   getById: (id) => api.get(`/surveys/${id}`),
+  getMySurveys: () => api.get('/surveys/my-surveys'),
+  getMyResponses: () => api.get('/surveys/my-responses'),
+  getSurveyResponse: (id) => api.get(`/surveys/${id}/my-response`),
   submit: (id, data) => api.post(`/surveys/${id}/submit`, data),
+  updateResponse: (id, data) => api.put(`/surveys/${id}/response`, data),
 };
 
 export default api; 

@@ -27,7 +27,16 @@ const Layout = () => {
           </Typography>
           {user ? (
             <>
-              <Typography sx={{ mr: 2 }}>
+              <Button color="inherit" component={Link} to="/surveys">
+                所有问卷
+              </Button>
+              <Button color="inherit" component={Link} to="/my-surveys">
+                我的问卷
+              </Button>
+              <Button color="inherit" component={Link} to="/my-responses">
+                我的回答
+              </Button>
+              <Typography sx={{ mx: 2 }}>
                 欢迎, {user.user.username}
               </Typography>
               <Button color="inherit" onClick={handleLogout}>
