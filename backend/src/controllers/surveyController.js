@@ -382,61 +382,67 @@ const deleteSurvey = async (req, res) => {
 const getSurveyStats = async (req, res) => {
   try {
     const { surveyId } = req.params;
-    const userId = req.user.userId;
     
-    // 检查是否是问卷创建者
-    const [survey] = await pool.query(
-      'SELECT creator_id FROM surveys WHERE survey_id = ?',
-      [surveyId]
-    );
-    
-    if (!survey || survey[0].creator_id !== userId) {
-      return res.status(403).json({ error: '无权查看统计信息' });
-    }
-
-    // 获取总回答人数
-    const [respondentsCount] = await pool.query(
-      'SELECT COUNT(DISTINCT user_id) as total FROM responses WHERE survey_id = ?',
-      [surveyId]
-    );
-
-    // 获取所有问题
+    // 修改查询，添加 ORDER BY question_order
     const [questions] = await pool.query(`
-      SELECT q.question_id, q.question_text, q.question_type, 
-             r.answer_text, r.option_id, r.user_id, u.username,
-             o.option_text
+      SELECT 
+        q.question_id,
+        q.question_text,
+        q.question_type as type,
+        q.question_order,
+        o.option_id,
+        o.option_text
       FROM questions q
-      LEFT JOIN responses r ON q.question_id = r.question_id
-      LEFT JOIN users u ON r.user_id = u.user_id
-      LEFT JOIN options o ON r.option_id = o.option_id
+      LEFT JOIN options o ON q.question_id = o.question_id
       WHERE q.survey_id = ?
-      ORDER BY q.question_id, r.submitted_at DESC
+      ORDER BY q.question_order, o.option_order
     `, [surveyId]);
 
-    // 处理统计数据
+    // 获取所有回答
+    const [responses] = await pool.query(`
+      SELECT 
+        r.*,
+        u.username
+      FROM responses r
+      JOIN users u ON r.user_id = u.user_id
+      WHERE r.survey_id = ?
+    `, [surveyId]);
+
+    // 统计数据初始化
     const stats = {
-      totalRespondents: respondentsCount[0].total,
-      choiceStats: [],
-      textResponses: []
+      totalRespondents: new Set(responses.map(r => r.user_id)).size,
+      textResponses: [],
+      choiceStats: []
     };
 
-    // 按问题类型分组处理
+    // 按问题分组处理
     const groupedQuestions = {};
     questions.forEach(q => {
       if (!groupedQuestions[q.question_id]) {
         groupedQuestions[q.question_id] = {
           questionId: q.question_id,
           questionText: q.question_text,
-          type: q.question_type,
+          type: q.type,
+          options: [],
           responses: []
         };
       }
-      if (q.answer_text || q.option_id) {
-        groupedQuestions[q.question_id].responses.push({
-          username: q.username,
-          answerText: q.answer_text,
-          optionText: q.option_text,
-          optionId: q.option_id
+      if (q.option_id) {
+        groupedQuestions[q.question_id].options.push({
+          optionId: q.option_id,
+          text: q.option_text
+        });
+      }
+    });
+
+    // 添加回答到对应的问题
+    responses.forEach(r => {
+      if (groupedQuestions[r.question_id]) {
+        groupedQuestions[r.question_id].responses.push({
+          userId: r.user_id,
+          username: r.username,
+          answerText: r.answer_text,
+          optionId: r.option_id
         });
       }
     });
@@ -452,23 +458,42 @@ const getSurveyStats = async (req, res) => {
             text: r.answerText
           }))
         });
-      } else if (question.type === 'MULTIPLE_CHOICE') {
-        // 处理多选题统计
+      } else {
+        // 处理选择题（单选和多选）
+        const totalResponses = new Set(question.responses.map(r => r.userId)).size;
         const optionCounts = {};
-        const totalResponses = new Set(question.responses.map(r => r.username)).size;
         
-        // 处理多选题的答案
+        // 初始化所有选项的计数为0
+        question.options.forEach(opt => {
+          optionCounts[opt.optionId] = 0;
+        });
+
+        // 统计选项计数
         question.responses.forEach(r => {
-          if (r.optionId) {
-            optionCounts[r.optionId] = (optionCounts[r.optionId] || 0) + 1;
+          if (question.type === 'MULTIPLE_CHOICE') {
+            // 多选题处理
+            if (r.answerText) {
+              const selectedOptions = r.answerText.split(',');
+              selectedOptions.forEach(optId => {
+                if (optionCounts[optId] !== undefined) {
+                  optionCounts[optId]++;
+                }
+              });
+            }
+          } else {
+            // 单选题处理
+            if (r.optionId && optionCounts[r.optionId] !== undefined) {
+              optionCounts[r.optionId]++;
+            }
           }
         });
 
-        const options = Object.entries(optionCounts).map(([optionId, count]) => ({
-          optionId,
-          text: question.responses.find(r => r.optionId === optionId)?.optionText,
-          count,
-          percentage: Math.round((count / totalResponses) * 100)
+        // 转换为前端需要的格式
+        const options = question.options.map(opt => ({
+          optionId: opt.optionId,
+          text: opt.text,
+          count: optionCounts[opt.optionId],
+          percentage: Math.round((optionCounts[opt.optionId] / totalResponses) * 100) || 0
         }));
 
         stats.choiceStats.push({
@@ -478,32 +503,25 @@ const getSurveyStats = async (req, res) => {
           totalResponses,
           options
         });
-      } else {
-        // 处理单选题统计
-        const optionCounts = {};
-        question.responses.forEach(r => {
-          if (r.optionId) {
-            optionCounts[r.optionId] = (optionCounts[r.optionId] || 0) + 1;
-          }
-        });
-
-        const options = Object.entries(optionCounts).map(([optionId, count]) => ({
-          optionId,
-          text: question.responses.find(r => r.optionId === optionId)?.optionText,
-          count,
-          percentage: Math.round((count / stats.totalRespondents) * 100)
-        }));
-
-        stats.choiceStats.push({
-          questionId: question.questionId,
-          questionText: question.questionText,
-          type: question.type,
-          options
-        });
       }
     });
 
-    res.json(stats);
+    // 修改最终的统计数据排序
+    const sortedStats = {
+      totalRespondents: stats.totalRespondents,
+      textResponses: stats.textResponses.sort((a, b) => {
+        const orderA = questions.find(q => q.question_id === a.questionId)?.question_order || 0;
+        const orderB = questions.find(q => q.question_id === b.questionId)?.question_order || 0;
+        return orderA - orderB;
+      }),
+      choiceStats: stats.choiceStats.sort((a, b) => {
+        const orderA = questions.find(q => q.question_id === a.questionId)?.question_order || 0;
+        const orderB = questions.find(q => q.question_id === b.questionId)?.question_order || 0;
+        return orderA - orderB;
+      })
+    };
+
+    res.json(sortedStats);
   } catch (error) {
     console.error('获取问卷统计失败:', error);
     res.status(500).json({ error: '服务器错误' });
