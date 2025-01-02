@@ -10,7 +10,8 @@ const {
   getMyResponses,
   getSurveyResponse,
   updateResponse,
-  deleteResponse
+  deleteResponse,
+  deleteSurvey
 } = require('../controllers/surveyController');
 
 router.post('/', auth, createSurvey);
@@ -22,5 +23,6 @@ router.get('/:surveyId/my-response', auth, getSurveyResponse);
 router.post('/:surveyId/submit', auth, submitResponse);
 router.put('/:surveyId/response', auth, updateResponse);
 router.delete('/:surveyId/response', auth, deleteResponse);
+router.delete('/:surveyId', auth, deleteSurvey);
 
 module.exports = router; 

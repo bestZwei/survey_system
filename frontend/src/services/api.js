@@ -38,6 +38,7 @@ export const surveys = {
   submit: (id, data) => api.post(`/surveys/${id}/submit`, data),
   updateResponse: (id, data) => api.put(`/surveys/${id}/response`, data),
   deleteResponse: (id) => api.delete(`/surveys/${id}/response`),
+  deleteSurvey: (id) => api.delete(`/surveys/${id}`),
 };
 
 export default api; 

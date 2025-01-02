@@ -196,33 +196,38 @@ const getMyResponses = async (req, res) => {
   let connection;
   try {
     const userId = req.user.userId;
-    if (!userId) {
-      return res.status(401).json({ error: '未授权访问' });
-    }
-
+    
     connection = await pool.getConnection();
-
+    
+    // 修改查询，使用子查询获取最新的回答
     const [responses] = await connection.query(`
-      SELECT DISTINCT 
-        s.survey_id, 
+      SELECT 
+        s.survey_id,
         s.title,
         s.description,
-        MAX(r.created_at) as created_at,
-        MAX(r.response_id) as response_id
-      FROM responses r
-      INNER JOIN surveys s ON r.survey_id = s.survey_id
-      WHERE r.user_id = ?
-      GROUP BY s.survey_id, s.title, s.description
-      ORDER BY MAX(r.created_at) DESC
-    `, [userId]);
+        (
+          SELECT submitted_at 
+          FROM responses r2 
+          WHERE r2.survey_id = s.survey_id 
+          AND r2.user_id = ? 
+          ORDER BY r2.submitted_at DESC 
+          LIMIT 1
+        ) as submitted_at
+      FROM surveys s
+      WHERE s.survey_id IN (
+        SELECT DISTINCT survey_id 
+        FROM responses 
+        WHERE user_id = ?
+      )
+      ORDER BY submitted_at DESC
+    `, [userId, userId]);
 
-    return res.json(responses || []);
-
+    res.json(responses);
   } catch (error) {
     console.error('获取用户回答失败:', error);
-    return res.status(500).json({ 
+    res.status(500).json({ 
       error: '服务器错误',
-      message: error.message
+      details: error.message 
     });
   } finally {
     if (connection) {
@@ -311,6 +316,68 @@ const deleteResponse = async (req, res) => {
   }
 };
 
+// 删除问卷
+const deleteSurvey = async (req, res) => {
+  let connection;
+  try {
+    const { surveyId } = req.params;
+    const userId = req.user.userId;
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    try {
+      // 检查问卷是否存在且属于当前用户
+      const [survey] = await connection.query(
+        'SELECT survey_id FROM surveys WHERE survey_id = ? AND creator_id = ?',
+        [surveyId, userId]
+      );
+
+      if (survey.length === 0) {
+        return res.status(403).json({ error: '无权限删除此问卷' });
+      }
+
+      // 删除相关的回答
+      await connection.query(
+        'DELETE FROM responses WHERE survey_id = ?',
+        [surveyId]
+      );
+
+      // 删除问题的选项
+      await connection.query(`
+        DELETE o FROM options o
+        JOIN questions q ON o.question_id = q.question_id
+        WHERE q.survey_id = ?
+      `, [surveyId]);
+
+      // 删除问题
+      await connection.query(
+        'DELETE FROM questions WHERE survey_id = ?',
+        [surveyId]
+      );
+
+      // 删除问卷
+      await connection.query(
+        'DELETE FROM surveys WHERE survey_id = ?',
+        [surveyId]
+      );
+
+      await connection.commit();
+      res.json({ message: '问卷删除成功' });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    }
+  } catch (error) {
+    console.error('删除问卷失败:', error);
+    res.status(500).json({ error: '服务器错误' });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+};
+
 module.exports = {
   createSurvey,
   getSurveys,
@@ -320,5 +387,6 @@ module.exports = {
   getMyResponses,
   getSurveyResponse,
   updateResponse,
-  deleteResponse
+  deleteResponse,
+  deleteSurvey
 }; 

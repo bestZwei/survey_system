@@ -35,10 +35,17 @@ const MyResponses = () => {
       setLoading(true);
       setError('');
       const { data } = await surveys.getMyResponses();
+      if (!Array.isArray(data)) {
+        throw new Error('返回数据格式错误');
+      }
       setResponses(data);
     } catch (error) {
       console.error('加载回答失败:', error);
-      setError(error.message === 'Network Error' ? '无法连接到服务器' : '加载回答失败');
+      const errorMessage = error.response?.data?.details || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          '加载回答失败';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -114,12 +121,12 @@ const MyResponses = () => {
                   {response.title}
                 </Typography>
                 <Typography variant="body2" color="textSecondary" gutterBottom>
-                  提交时间: {formatDate(response.created_at)}
+                  提交时间: {formatDate(response.submitted_at)}
                 </Typography>
                 <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
                   <Button
                     component={Link}
-                    to={`/surveys/${response.survey_id}`}
+                    to={`/surveys/${response.survey_id}?preview=true`}
                     variant="outlined"
                     size="small"
                     fullWidth
