@@ -202,18 +202,18 @@ const getMyResponses = async (req, res) => {
 
     connection = await pool.getConnection();
 
-    // 修改查询语句，使用 response_id 作为唯一标识
     const [responses] = await connection.query(`
       SELECT DISTINCT 
         s.survey_id, 
         s.title,
         s.description,
+        MAX(r.created_at) as created_at,
         MAX(r.response_id) as response_id
       FROM responses r
       INNER JOIN surveys s ON r.survey_id = s.survey_id
       WHERE r.user_id = ?
       GROUP BY s.survey_id, s.title, s.description
-      ORDER BY MAX(r.response_id) DESC
+      ORDER BY MAX(r.created_at) DESC
     `, [userId]);
 
     return res.json(responses || []);
@@ -226,11 +226,7 @@ const getMyResponses = async (req, res) => {
     });
   } finally {
     if (connection) {
-      try {
-        connection.release();
-      } catch (releaseError) {
-        console.error('释放数据库连接失败:', releaseError);
-      }
+      connection.release();
     }
   }
 };
@@ -297,6 +293,24 @@ const updateResponse = async (req, res) => {
   }
 };
 
+// 删除回答
+const deleteResponse = async (req, res) => {
+  try {
+    const { surveyId } = req.params;
+    const userId = req.user.userId;
+
+    await pool.query(
+      'DELETE FROM responses WHERE survey_id = ? AND user_id = ?',
+      [surveyId, userId]
+    );
+
+    res.json({ message: '回答删除成功' });
+  } catch (error) {
+    console.error('删除回答失败:', error);
+    res.status(500).json({ error: '服务器错误' });
+  }
+};
+
 module.exports = {
   createSurvey,
   getSurveys,
@@ -305,5 +319,6 @@ module.exports = {
   getMySurveys,
   getMyResponses,
   getSurveyResponse,
-  updateResponse
+  updateResponse,
+  deleteResponse
 }; 
