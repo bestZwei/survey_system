@@ -48,7 +48,8 @@ export const admin = {
   getAllUsers: () => api.get('/admin/users'),
   updateUserRole: (userId, role) => api.put(`/admin/users/${userId}/role`, { role }),
   deleteUser: (userId) => api.delete(`/admin/users/${userId}`),
-  getSystemStats: () => api.get('/admin/stats')
+  getSystemStats: () => api.get('/admin/stats'),
+  updateUserInfo: (userId, data) => api.put(`/admin/users/${userId}/info`, data)
 };
 
 export default api; 

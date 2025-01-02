@@ -13,13 +13,19 @@ import {
   MenuItem,
   Grid,
   Card,
-  CardContent
+  CardContent,
+  TextField
 } from '@mui/material';
 import { admin } from '../services/api';
 
 const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
+  const [editForm, setEditForm] = useState({
+    username: '',
+    email: ''
+  });
   
   useEffect(() => {
     loadData();
@@ -54,6 +60,35 @@ const AdminDashboard = () => {
         loadData();
       } catch (error) {
         console.error('删除用户失败:', error);
+      }
+    }
+  };
+
+  const handleEditClick = (user) => {
+    setEditingUser(user);
+    setEditForm({
+      username: user.username,
+      email: user.email
+    });
+  };
+
+  const handleEditSubmit = async () => {
+    try {
+      await admin.updateUserInfo(editingUser.user_id, editForm);
+      setEditingUser(null);
+      loadData();
+    } catch (error) {
+      console.error('更新用户信息失败:', error);
+    }
+  };
+
+  const handleResetPassword = async (userId) => {
+    if (window.confirm('确定要重置该用户的密码为123456吗？')) {
+      try {
+        await admin.updateUserInfo(userId, { resetPassword: true });
+        alert('密码重置成功');
+      } catch (error) {
+        console.error('重置密码失败:', error);
       }
     }
   };
@@ -108,8 +143,28 @@ const AdminDashboard = () => {
           <TableBody>
             {users.map((user) => (
               <TableRow key={user.user_id}>
-                <TableCell>{user.username}</TableCell>
-                <TableCell>{user.email}</TableCell>
+                <TableCell>
+                  {editingUser?.user_id === user.user_id ? (
+                    <TextField
+                      value={editForm.username}
+                      onChange={(e) => setEditForm({...editForm, username: e.target.value})}
+                      size="small"
+                    />
+                  ) : (
+                    user.username
+                  )}
+                </TableCell>
+                <TableCell>
+                  {editingUser?.user_id === user.user_id ? (
+                    <TextField
+                      value={editForm.email}
+                      onChange={(e) => setEditForm({...editForm, email: e.target.value})}
+                      size="small"
+                    />
+                  ) : (
+                    user.email
+                  )}
+                </TableCell>
                 <TableCell>
                   <Select
                     value={user.role}
@@ -124,12 +179,25 @@ const AdminDashboard = () => {
                   {new Date(user.created_at).toLocaleString()}
                 </TableCell>
                 <TableCell>
-                  <Button 
-                    color="error"
-                    onClick={() => handleDeleteUser(user.user_id)}
-                  >
-                    删除
-                  </Button>
+                  {editingUser?.user_id === user.user_id ? (
+                    <>
+                      <Button onClick={handleEditSubmit}>保存</Button>
+                      <Button onClick={() => setEditingUser(null)}>取消</Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button onClick={() => handleEditClick(user)}>编辑</Button>
+                      <Button onClick={() => handleResetPassword(user.user_id)}>
+                        重置密码
+                      </Button>
+                      <Button 
+                        color="error"
+                        onClick={() => handleDeleteUser(user.user_id)}
+                      >
+                        删除
+                      </Button>
+                    </>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
