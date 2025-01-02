@@ -7,9 +7,6 @@ const register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
     
-    // 输出请求数据以便调试
-    console.log('注册请求数据:', { username, email });
-    
     // 检查邮箱是否已存在
     const [existingUsers] = await pool.query(
       'SELECT * FROM users WHERE email = ?',
@@ -23,16 +20,21 @@ const register = async (req, res) => {
     // 加密密码
     const hashedPassword = await bcrypt.hash(password, 8);
     
-    // 创建新用户
+    // 检查是否是第一个用户
+    const [userCount] = await pool.query('SELECT COUNT(*) as count FROM users');
+    const isFirstUser = userCount[0].count === 0;
+    
+    // 创建新用户，如果是第一个用户则设置为管理员
     const userId = uuidv4();
     await pool.query(
-      'INSERT INTO users (user_id, username, email, password) VALUES (?, ?, ?, ?)',
-      [userId, username, email, hashedPassword]
+      'INSERT INTO users (user_id, username, email, password, role) VALUES (?, ?, ?, ?, ?)',
+      [userId, username, email, hashedPassword, isFirstUser ? 'admin' : 'user']
     );
 
-    res.status(201).json({ message: '注册成功' });
+    res.status(201).json({ 
+      message: isFirstUser ? '注册成功，您是第一个用户，已被设置为管理员' : '注册成功'
+    });
   } catch (error) {
-    // 详细的错误日志
     console.error('注册失败:', error);
     res.status(500).json({ error: '服务器错误: ' + error.message });
   }

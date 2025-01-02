@@ -54,6 +54,11 @@ const Layout = () => {
               <Button color="inherit" onClick={handleLogout}>
                 退出
               </Button>
+              {user && user.user.role === 'admin' && (
+                <Button color="inherit" component={Link} to="/admin">
+                  管理控制台
+                </Button>
+              )}
             </>
           ) : (
             <>
