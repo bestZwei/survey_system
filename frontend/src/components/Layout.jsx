@@ -36,7 +36,19 @@ const Layout = () => {
               <Button color="inherit" component={Link} to="/my-responses">
                 我的回答
               </Button>
-              <Typography sx={{ mx: 2 }}>
+              <Typography 
+                sx={{ 
+                  mx: 2, 
+                  cursor: 'pointer',
+                  color: 'white',
+                  '&:hover': {
+                    color: '#e0e0e0',
+                    textDecoration: 'none'
+                  }
+                }}
+                component={Link}
+                to="/profile"
+              >
                 欢迎, {user.user.username}
               </Typography>
               <Button color="inherit" onClick={handleLogout}>

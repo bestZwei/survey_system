@@ -10,6 +10,7 @@ import MySurveys from './pages/MySurveys';
 import MyResponses from './pages/MyResponses';
 import SurveyStats from './pages/SurveyStats';
 import Layout from './components/Layout';
+import UserProfile from './pages/UserProfile';
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
             <Route path="surveys/:id" element={<SurveyDetail />} />
             <Route path="surveys/:id/edit" element={<SurveyDetail edit />} />
             <Route path="surveys/:id/stats" element={<SurveyStats />} />
+            <Route path="/profile" element={<UserProfile />} />
           </Route>
         </Routes>
       </BrowserRouter>

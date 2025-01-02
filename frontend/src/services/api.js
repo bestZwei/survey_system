@@ -26,6 +26,8 @@ export const auth = {
     }
   },
   login: (data) => api.post('/auth/login', data),
+  getCurrentUser: () => api.get('/auth/me'),
+  updateCurrentUser: (data) => api.put('/auth/me', data),
 };
 
 export const surveys = {
