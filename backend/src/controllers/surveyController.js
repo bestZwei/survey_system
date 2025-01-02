@@ -378,6 +378,138 @@ const deleteSurvey = async (req, res) => {
   }
 };
 
+// 获取问卷统计
+const getSurveyStats = async (req, res) => {
+  try {
+    const { surveyId } = req.params;
+    const userId = req.user.userId;
+    
+    // 检查是否是问卷创建者
+    const [survey] = await pool.query(
+      'SELECT creator_id FROM surveys WHERE survey_id = ?',
+      [surveyId]
+    );
+    
+    if (!survey || survey[0].creator_id !== userId) {
+      return res.status(403).json({ error: '无权查看统计信息' });
+    }
+
+    // 获取总回答人数
+    const [respondentsCount] = await pool.query(
+      'SELECT COUNT(DISTINCT user_id) as total FROM responses WHERE survey_id = ?',
+      [surveyId]
+    );
+
+    // 获取所有问题
+    const [questions] = await pool.query(`
+      SELECT q.question_id, q.question_text, q.question_type, 
+             r.answer_text, r.option_id, r.user_id, u.username,
+             o.option_text
+      FROM questions q
+      LEFT JOIN responses r ON q.question_id = r.question_id
+      LEFT JOIN users u ON r.user_id = u.user_id
+      LEFT JOIN options o ON r.option_id = o.option_id
+      WHERE q.survey_id = ?
+      ORDER BY q.question_id, r.submitted_at DESC
+    `, [surveyId]);
+
+    // 处理统计数据
+    const stats = {
+      totalRespondents: respondentsCount[0].total,
+      choiceStats: [],
+      textResponses: []
+    };
+
+    // 按问题类型分组处理
+    const groupedQuestions = {};
+    questions.forEach(q => {
+      if (!groupedQuestions[q.question_id]) {
+        groupedQuestions[q.question_id] = {
+          questionId: q.question_id,
+          questionText: q.question_text,
+          type: q.question_type,
+          responses: []
+        };
+      }
+      if (q.answer_text || q.option_id) {
+        groupedQuestions[q.question_id].responses.push({
+          username: q.username,
+          answerText: q.answer_text,
+          optionText: q.option_text,
+          optionId: q.option_id
+        });
+      }
+    });
+
+    // 处理每个问题的统计
+    Object.values(groupedQuestions).forEach(question => {
+      if (question.type === 'TEXT') {
+        stats.textResponses.push({
+          questionId: question.questionId,
+          questionText: question.questionText,
+          answers: question.responses.map(r => ({
+            username: r.username,
+            text: r.answerText
+          }))
+        });
+      } else if (question.type === 'MULTIPLE_CHOICE') {
+        // 处理多选题统计
+        const optionCounts = {};
+        const totalResponses = new Set(question.responses.map(r => r.username)).size;
+        
+        // 处理多选题的答案
+        question.responses.forEach(r => {
+          if (r.optionId) {
+            optionCounts[r.optionId] = (optionCounts[r.optionId] || 0) + 1;
+          }
+        });
+
+        const options = Object.entries(optionCounts).map(([optionId, count]) => ({
+          optionId,
+          text: question.responses.find(r => r.optionId === optionId)?.optionText,
+          count,
+          percentage: Math.round((count / totalResponses) * 100)
+        }));
+
+        stats.choiceStats.push({
+          questionId: question.questionId,
+          questionText: question.questionText,
+          type: question.type,
+          totalResponses,
+          options
+        });
+      } else {
+        // 处理单选题统计
+        const optionCounts = {};
+        question.responses.forEach(r => {
+          if (r.optionId) {
+            optionCounts[r.optionId] = (optionCounts[r.optionId] || 0) + 1;
+          }
+        });
+
+        const options = Object.entries(optionCounts).map(([optionId, count]) => ({
+          optionId,
+          text: question.responses.find(r => r.optionId === optionId)?.optionText,
+          count,
+          percentage: Math.round((count / stats.totalRespondents) * 100)
+        }));
+
+        stats.choiceStats.push({
+          questionId: question.questionId,
+          questionText: question.questionText,
+          type: question.type,
+          options
+        });
+      }
+    });
+
+    res.json(stats);
+  } catch (error) {
+    console.error('获取问卷统计失败:', error);
+    res.status(500).json({ error: '服务器错误' });
+  }
+};
+
 module.exports = {
   createSurvey,
   getSurveys,
@@ -388,5 +520,6 @@ module.exports = {
   getSurveyResponse,
   updateResponse,
   deleteResponse,
-  deleteSurvey
+  deleteSurvey,
+  getSurveyStats
 }; 

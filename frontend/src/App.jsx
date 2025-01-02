@@ -8,6 +8,7 @@ import SurveyCreate from './pages/SurveyCreate';
 import SurveyDetail from './pages/SurveyDetail';
 import MySurveys from './pages/MySurveys';
 import MyResponses from './pages/MyResponses';
+import SurveyStats from './pages/SurveyStats';
 import Layout from './components/Layout';
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
             <Route path="surveys/create" element={<SurveyCreate />} />
             <Route path="surveys/:id" element={<SurveyDetail />} />
             <Route path="surveys/:id/edit" element={<SurveyDetail edit />} />
+            <Route path="surveys/:id/stats" element={<SurveyStats />} />
           </Route>
         </Routes>
       </BrowserRouter>

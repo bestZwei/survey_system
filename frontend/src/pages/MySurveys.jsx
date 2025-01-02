@@ -101,6 +101,15 @@ const MySurveys = () => {
                     查看详情
                   </Button>
                   <Button
+                    component={Link}
+                    to={`/surveys/${survey.survey_id}/stats`}
+                    variant="contained"
+                    color="primary"
+                    fullWidth
+                  >
+                    查看统计
+                  </Button>
+                  <Button
                     onClick={() => handleDeleteClick(survey)}
                     variant="outlined"
                     color="error"
