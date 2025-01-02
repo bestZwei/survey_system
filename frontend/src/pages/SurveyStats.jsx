@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Container, Typography, CircularProgress, Alert, Paper, List, ListItem, ListItemText, Box, LinearProgress } from '@mui/material';
+import { Container, Typography, CircularProgress, Alert, Paper, List, ListItem, ListItemText, Box, LinearProgress, Grid } from '@mui/material';
 import { surveys } from '../services/api';
 
 const SurveyStats = () => {
@@ -61,29 +61,40 @@ const SurveyStats = () => {
                     ` (共${question.totalResponses}人回答)`}
                 </Typography>
               </Box>
-              <List>
+              <List sx={{ width: '100%' }}>
                 {question.options.map(option => (
-                  <ListItem key={option.optionId}>
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                          <Typography>{option.text}</Typography>
-                          <Typography color="textSecondary">
-                            {option.count}人选择
-                          </Typography>
-                          <LinearProgress 
-                            variant="determinate" 
-                            value={option.percentage}
-                            sx={{ 
-                              width: '200px',
-                              height: '8px',
-                              borderRadius: '4px'
-                            }}
-                          />
-                          <Typography>{option.percentage}%</Typography>
-                        </Box>
-                      }
-                    />
+                  <ListItem 
+                    key={option.optionId}
+                    sx={{ 
+                      display: 'flex',
+                      alignItems: 'center',
+                      py: 1
+                    }}
+                  >
+                    <Grid container alignItems="center" spacing={2}>
+                      <Grid item xs={4}>
+                        <Typography noWrap>{option.text}</Typography>
+                      </Grid>
+                      <Grid item xs={2}>
+                        <Typography color="textSecondary">
+                          {option.count}人选择
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={4}>
+                        <LinearProgress 
+                          variant="determinate" 
+                          value={option.percentage}
+                          sx={{ 
+                            width: '100%',
+                            height: '8px',
+                            borderRadius: '4px'
+                          }}
+                        />
+                      </Grid>
+                      <Grid item xs={2}>
+                        <Typography>{option.percentage}%</Typography>
+                      </Grid>
+                    </Grid>
                   </ListItem>
                 ))}
               </List>
@@ -103,9 +114,19 @@ const SurveyStats = () => {
               </Box>
               <List>
                 {question.answers.map((answer, index) => (
-                  <ListItem key={index}>
+                  <ListItem 
+                    key={index}
+                    sx={{ 
+                      borderBottom: index < question.answers.length - 1 ? '1px solid #eee' : 'none',
+                      py: 2
+                    }}
+                  >
                     <ListItemText
-                      primary={answer.text}
+                      primary={
+                        <Typography sx={{ wordBreak: 'break-word' }}>
+                          {answer.text}
+                        </Typography>
+                      }
                       secondary={`回答者: ${answer.username}`}
                     />
                   </ListItem>
