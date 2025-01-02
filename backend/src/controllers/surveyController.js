@@ -57,11 +57,42 @@ const createSurvey = async (req, res) => {
 // 获取问卷列表
 const getSurveys = async (req, res) => {
   try {
-    const [surveys] = await pool.query(
-      'SELECT s.*, u.username as creator_name FROM surveys s JOIN users u ON s.creator_id = u.user_id WHERE s.status = "PUBLISHED" ORDER BY s.created_at DESC'
-    );
+    if (!req.user) {
+      return res.json([]);
+    }
+
+    const userId = req.user.userId;
+    console.log('当前用户ID:', userId);
+
+    // 修改查询语句，简化条件
+    const [surveys] = await pool.query(`
+      SELECT 
+        s.*,
+        u.username as creator_name,
+        (SELECT COUNT(*) FROM questions q WHERE q.survey_id = s.survey_id) as question_count,
+        (SELECT COUNT(DISTINCT r.user_id) FROM responses r WHERE r.survey_id = s.survey_id) as response_count
+      FROM surveys s 
+      INNER JOIN users u ON s.creator_id = u.user_id 
+      WHERE 
+        s.creator_id != ? 
+        AND NOT EXISTS (
+          SELECT 1 
+          FROM responses r 
+          WHERE r.survey_id = s.survey_id 
+          AND r.user_id = ?
+        )
+      ORDER BY s.created_at DESC
+    `, [userId, userId]);
+
+    console.log('查询结果:', {
+      userId,
+      surveysCount: surveys.length,
+      surveys: surveys
+    });
+
     res.json(surveys);
   } catch (error) {
+    console.error('获取问卷列表失败:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 };
@@ -193,46 +224,35 @@ const getMySurveys = async (req, res) => {
 
 // 获取用户的问卷回答
 const getMyResponses = async (req, res) => {
-  let connection;
   try {
     const userId = req.user.userId;
-    
-    connection = await pool.getConnection();
-    
-    // 修改查询，使用子查询获取最新的回答
-    const [responses] = await connection.query(`
+
+    const [responses] = await pool.query(`
+      WITH LastSubmissions AS (
+        SELECT 
+          survey_id,
+          MAX(created_at) as last_submitted
+        FROM responses
+        WHERE user_id = ?
+        GROUP BY survey_id
+      )
       SELECT 
         s.survey_id,
         s.title,
         s.description,
-        (
-          SELECT submitted_at 
-          FROM responses r2 
-          WHERE r2.survey_id = s.survey_id 
-          AND r2.user_id = ? 
-          ORDER BY r2.submitted_at DESC 
-          LIMIT 1
-        ) as submitted_at
+        ls.last_submitted as submitted_at
       FROM surveys s
-      WHERE s.survey_id IN (
-        SELECT DISTINCT survey_id 
-        FROM responses 
-        WHERE user_id = ?
-      )
-      ORDER BY submitted_at DESC
-    `, [userId, userId]);
+      JOIN LastSubmissions ls ON s.survey_id = ls.survey_id
+      ORDER BY ls.last_submitted DESC
+    `, [userId]);
+
+    console.log('获取回答 - 用户ID:', userId);
+    console.log('回答数量:', responses.length);
 
     res.json(responses);
   } catch (error) {
     console.error('获取用户回答失败:', error);
-    res.status(500).json({ 
-      error: '服务器错误',
-      details: error.message 
-    });
-  } finally {
-    if (connection) {
-      connection.release();
-    }
+    res.status(500).json({ error: '服务器错误' });
   }
 };
 
