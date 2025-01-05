@@ -88,7 +88,7 @@ const SurveyCreate = () => {
         description,
         questions,
       });
-      navigate('/surveys');
+      navigate('/my-surveys');
     } catch (err) {
       setError(err.response?.data?.error || '创建问卷失败');
     }

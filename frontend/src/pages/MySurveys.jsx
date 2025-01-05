@@ -54,13 +54,13 @@ const MySurveys = () => {
       setSnackbar({
         open: true,
         message: '问卷删除成功',
-        severity: 'success'
+        severity: 'success',
       });
     } catch (error) {
       setSnackbar({
         open: true,
         message: '删除失败',
-        severity: 'error'
+        severity: 'error',
       });
     } finally {
       setDeleteDialogOpen(false);
@@ -70,9 +70,19 @@ const MySurveys = () => {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4 }}>
-      <Typography variant="h4" gutterBottom>
-        我创建的问卷
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" gutterBottom>
+          我创建的问卷
+        </Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          component={Link}
+          to="/surveys/create"
+        >
+          创建问卷
+        </Button>
+      </Box>
       
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
