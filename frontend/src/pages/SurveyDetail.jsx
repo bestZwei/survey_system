@@ -20,10 +20,9 @@ import {
 
 const QuestionDisplay = ({ question, index, answers, handleAnswerChange, isPreview }) => {
   return (
-    <Box key={question.question_id} sx={{ mb: 4 }}>
+    <Box sx={{ mb: 3 }}>
       <Typography variant="h6" gutterBottom>
         {`${index + 1}. ${question.question_text}`}
-        {question.required && !isPreview && <span style={{ color: 'red' }}> *</span>}
       </Typography>
 
       {question.type === 'TEXT' && (
